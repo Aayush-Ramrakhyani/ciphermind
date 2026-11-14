@@ -145,3 +145,7 @@ See [`docs/SECURITY_AUDIT.md`](SECURITY_AUDIT.md) for the full 19-point security
 ## License
 
 MIT License — see LICENSE file.
+
+> **Note:** This project was built for practice and learning purposes.
+> If you'd like to use it, adapt it, or collaborate, feel free to reach out:
+> **aayushr7777@gmail.com**
