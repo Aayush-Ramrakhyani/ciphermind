@@ -1,0 +1,154 @@
+name: CipherMind CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dev dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Run black
+        working-directory: backend
+        run: black --check .
+
+      - name: Run flake8
+        working-directory: backend
+        run: flake8 . --max-line-length=100
+
+      - name: Run isort
+        working-directory: backend
+        run: isort --check-only .
+
+      - name: Run bandit (security linter)
+        working-directory: backend
+        run: bandit -r cryptanalysis ai apps -ll
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ciphermind_test
+          POSTGRES_USER: ciphermind
+          POSTGRES_PASSWORD: ciphermind
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DJANGO_SETTINGS_MODULE: ciphermind.settings.development
+      DB_NAME: ciphermind_test
+      DB_USER: ciphermind
+      DB_PASSWORD: ciphermind
+      DB_HOST: localhost
+      DB_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      SECRET_KEY: ci-test-secret-key-not-for-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Run migrations
+        working-directory: backend
+        run: python manage.py migrate
+
+      - name: Run tests (excluding accuracy benchmarks)
+        working-directory: backend
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml \
+            --ignore=tests/benchmarks \
+            -m "not accuracy"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: backend/coverage.xml
+          fail_ci_if_error: false
+
+  security:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Scan dependencies
+        working-directory: backend
+        run: safety check -r requirements.txt --short-report
+
+  flutter:
+    name: Flutter Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.0"
+          channel: "stable"
+
+      - name: Flutter pub get
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: frontend
+        run: flutter analyze
+
+      - name: Flutter test
+        working-directory: frontend
+        run: flutter test
