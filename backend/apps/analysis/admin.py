@@ -1,3 +1,9 @@
+"""
+/*
+ * Django admin registration for AnalysisJob and AnalysisResult models.
+ */
+"""
+
 from django.contrib import admin
 
 from .models import AnalysisJob, AnalysisResult

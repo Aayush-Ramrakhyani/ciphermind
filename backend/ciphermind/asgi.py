@@ -1,3 +1,9 @@
+"""
+/*
+ * ASGI entry point for CipherMind — used by async servers (Daphne, Uvicorn).
+ */
+"""
+
 import os
 from django.core.asgi import get_asgi_application
 

@@ -1,4 +1,9 @@
-"""Unit tests for the Vigenère cipher solver."""
+"""
+/*
+ * Unit tests for the Vigenère cipher solver.
+ * Tests: decryption roundtrip, key recovery via Kasiski + IoC, solver ranking.
+ */
+"""
 
 import pytest
 

@@ -1,4 +1,9 @@
-"""Unit tests for the Affine cipher solver."""
+"""
+/*
+ * Unit tests for the Affine cipher solver.
+ * Tests: decryption correctness for all valid (a, b) pairs, solver ranking.
+ */
+"""
 
 import pytest
 

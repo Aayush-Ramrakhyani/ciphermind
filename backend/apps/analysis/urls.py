@@ -1,4 +1,9 @@
-"""Analysis URL patterns."""
+"""
+/*
+ * Analysis URL patterns.
+ * Playground endpoint is unauthenticated; all other endpoints require JWT.
+ */
+"""
 
 from django.urls import path
 

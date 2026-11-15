@@ -1,3 +1,10 @@
+"""
+/*
+ * Django admin registration for the custom User model.
+ * Extends the default UserAdmin with CipherMind-specific fields.
+ */
+"""
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 

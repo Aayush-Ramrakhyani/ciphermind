@@ -1,4 +1,10 @@
-"""CipherMind production settings — hardened security."""
+"""
+/*
+ * CipherMind production settings — hardened security.
+ * SECRET_KEY, DATABASE_URL, REDIS_URL, and ANTHROPIC_API_KEY must be
+ * set via environment variables; never committed to source control.
+ */
+"""
 
 from .base import *  # noqa: F401, F403
 

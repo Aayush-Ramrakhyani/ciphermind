@@ -1,4 +1,9 @@
-"""Account views — register, login, logout, profile."""
+"""
+/*
+ * Account views — register, login (JWT), logout (token blacklist), and profile.
+ * All endpoints return consistent JSON envelopes via the custom exception handler.
+ */
+"""
 
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, status

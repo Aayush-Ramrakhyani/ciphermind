@@ -1,4 +1,10 @@
-"""Accounts URL patterns."""
+"""
+/*
+ * Accounts URL patterns.
+ * Auth routes (register/login/logout/token-refresh) are wired at root urls.py;
+ * only the profile endpoint lives here.
+ */
+"""
 
 from django.urls import path
 

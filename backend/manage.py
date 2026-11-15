@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+"""
+/*
+ * Django management script — entry point for all manage.py commands.
+ */
+"""
+
 import os
 import sys
 

@@ -1,3 +1,9 @@
+"""
+/*
+ * Django app config for the analysis app.
+ */
+"""
+
 from django.apps import AppConfig
 
 

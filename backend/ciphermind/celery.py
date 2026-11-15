@@ -1,4 +1,9 @@
-"""Celery application configuration for CipherMind."""
+"""
+/*
+ * Celery application configuration for CipherMind.
+ * Tasks are auto-discovered from each installed app's tasks.py.
+ */
+"""
 
 import os
 

@@ -1,4 +1,9 @@
-"""Global pytest configuration and fixtures."""
+"""
+/*
+ * Global pytest configuration and shared fixtures.
+ * Sets DJANGO_SETTINGS_MODULE to development before Django is imported.
+ */
+"""
 
 import os
 

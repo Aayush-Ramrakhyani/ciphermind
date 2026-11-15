@@ -1,4 +1,10 @@
-"""Centralised DRF exception handler — returns consistent error envelopes."""
+"""
+/*
+ * Centralised DRF exception handler.
+ * Wraps all error responses in a consistent {error: {status_code, detail}} envelope.
+ * Unhandled server errors are logged and return HTTP 500.
+ */
+"""
 
 import logging
 

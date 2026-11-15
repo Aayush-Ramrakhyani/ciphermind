@@ -1,4 +1,9 @@
-"""Unit tests for the monoalphabetic substitution solver."""
+"""
+/*
+ * Unit tests for the monoalphabetic substitution solver.
+ * Tests: key application, simulated annealing convergence, solver output.
+ */
+"""
 
 import pytest
 import string

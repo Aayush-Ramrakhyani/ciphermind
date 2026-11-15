@@ -1,4 +1,9 @@
-"""CipherMind root URL configuration."""
+"""
+/*
+ * CipherMind root URL configuration.
+ * API versioned under /api/v1/; Swagger docs at /api/docs/.
+ */
+"""
 
 from django.contrib import admin
 from django.urls import include, path

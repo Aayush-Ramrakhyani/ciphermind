@@ -1,4 +1,9 @@
-"""Account serializers — registration, login, profile."""
+"""
+/*
+ * Account serializers — registration, login, and profile.
+ * CustomTokenObtainPairSerializer embeds email and api_tier in the JWT payload.
+ */
+"""
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password

@@ -1,4 +1,9 @@
-"""Analysis serializers."""
+"""
+/*
+ * Analysis serializers — input validation, job status, and result output.
+ * SubmitAnalysisSerializer validates ciphertext length against settings.
+ */
+"""
 
 import hashlib
 
