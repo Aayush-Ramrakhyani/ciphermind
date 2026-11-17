@@ -45,3 +45,14 @@ LOGGING = {
 }
 
 DATABASES["default"]["HOST"] = "localhost"  # noqa: F405
+
+# Use dummy cache in development so Redis is not required
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+    }
+}
+
+# Disable rate limiting and silence its cache-related system checks in development
+RATELIMIT_ENABLE = False
+SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003", "django_ratelimit.W001"]

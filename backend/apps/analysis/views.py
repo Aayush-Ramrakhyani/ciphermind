@@ -96,7 +96,7 @@ class PlaygroundView(APIView):
     No persistence — just runs the engine and returns inline.
     Limited to 1000 characters to keep latency acceptable.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         from cryptanalysis.orchestrator import CryptanalysisOrchestrator
@@ -110,6 +110,10 @@ class PlaygroundView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        orchestrator = CryptanalysisOrchestrator()
-        result = orchestrator.analyse(ciphertext)
-        return Response(result.to_dict())
+        try:
+            orchestrator = CryptanalysisOrchestrator()
+            result = orchestrator.analyse(ciphertext)
+            return Response(result.to_dict())
+        except Exception as exc:
+            import traceback
+            return Response({"error": {"detail": str(exc), "trace": traceback.format_exc()}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

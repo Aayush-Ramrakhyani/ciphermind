@@ -136,7 +136,8 @@ class CryptanalysisOrchestrator:
                 logger.warning("Cipher solver %s failed: %s", solver.name, exc)
 
         # ── 4. Rank candidates ────────────────────────────────────────────────
-        result.candidates = rank_candidates(all_candidates, top_n=self.candidate_top_n)
+        ranked = rank_candidates(all_candidates, top_n=self.candidate_top_n * 3)
+        result.candidates = self._deduplicate(ranked, top_n=self.candidate_top_n)
 
         # ── 5. Multi-layer search ─────────────────────────────────────────────
         try:
@@ -147,6 +148,22 @@ class CryptanalysisOrchestrator:
 
         result.processing_time_ms = round((time.monotonic() - start) * 1000)
         return result
+
+    @staticmethod
+    def _deduplicate(candidates: List[CipherCandidate], top_n: int) -> List[CipherCandidate]:
+        """Remove candidates whose plaintext is identical to a higher-ranked candidate."""
+        seen_texts: set = set()
+        unique: List[CipherCandidate] = []
+        for c in candidates:
+            # Normalise: strip, uppercase, collapse whitespace for comparison
+            normalised = " ".join(c.plaintext.upper().split())
+            if normalised in seen_texts:
+                continue
+            seen_texts.add(normalised)
+            unique.append(c)
+            if len(unique) >= top_n:
+                break
+        return unique
 
     @staticmethod
     def _statistical_summary(ciphertext: str) -> Dict[str, Any]:

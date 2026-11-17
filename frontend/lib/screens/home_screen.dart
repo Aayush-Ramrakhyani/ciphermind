@@ -42,12 +42,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     try {
       final api = ref.read(apiClientProvider);
-      final jobData = await api.submitAnalysis(text);
+      final resultData = await api.playground(text);
       if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => AnalysisScreen(jobId: jobData['id'] as String),
+          builder: (_) => AnalysisScreen(inlineResult: resultData),
         ),
       );
     } catch (e) {

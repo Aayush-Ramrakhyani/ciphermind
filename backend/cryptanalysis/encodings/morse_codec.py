@@ -58,7 +58,12 @@ class MorseSolver(BaseSolver):
             return []
         sc = score_text(decoded)
         content_confidence = ConfidenceLevel(classify_confidence(sc))
-        confidence = ConfidenceLevel.HIGH if content_confidence == ConfidenceLevel.HIGH else ConfidenceLevel.LIKELY
+        if content_confidence == ConfidenceLevel.HIGH:
+            confidence = ConfidenceLevel.HIGH
+        elif sc > 0.05:
+            confidence = ConfidenceLevel.LIKELY
+        else:
+            confidence = content_confidence
         return [
             CipherCandidate(
                 cipher_type="morse",

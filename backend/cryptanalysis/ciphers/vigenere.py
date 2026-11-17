@@ -114,6 +114,25 @@ def _recover_key_candidates(text: str, key_len: int, top_per_col: int = 2) -> Li
     ]
 
 
+def _refine_key(ciphertext: str, initial_key: str) -> Tuple[str, float]:
+    """Hill-climb each key position to maximise language score."""
+    key = list(initial_key)
+    best_sc = score_text(_vigenere_decrypt(ciphertext, "".join(key)))
+    improved = True
+    while improved:
+        improved = False
+        for pos in range(len(key)):
+            for shift in range(26):
+                candidate = key[:]
+                candidate[pos] = chr(shift + ord("a"))
+                sc = score_text(_vigenere_decrypt(ciphertext, "".join(candidate)))
+                if sc > best_sc:
+                    best_sc = sc
+                    key[pos] = chr(shift + ord("a"))
+                    improved = True
+    return "".join(key), best_sc
+
+
 class VigenereSolver(BaseSolver):
     name = "vigenere"
 
@@ -144,16 +163,22 @@ class VigenereSolver(BaseSolver):
                 if keyword in seen_keys:
                     continue
                 seen_keys.add(keyword)
+                # Refine the key via hill-climbing before scoring
+                refined_key, sc = _refine_key(ciphertext, keyword)
+                if refined_key != keyword:
+                    seen_keys.add(refined_key)
+                keyword = refined_key
                 plaintext = _vigenere_decrypt(ciphertext, keyword)
-                sc = score_text(plaintext)
-                confidence = ConfidenceLevel(classify_confidence(sc))
+                # Penalise longer keys so a Caesar/Affine won't be beaten by Vigenère overfitting
+                penalised_sc = round(sc - 0.008 * len(keyword), 4)
+                confidence = ConfidenceLevel(classify_confidence(penalised_sc))
                 candidates.append(
                     CipherCandidate(
                         cipher_type="vigenere",
                         plaintext=plaintext,
                         key=keyword,
                         confidence=confidence,
-                        language_score=sc,
+                        language_score=penalised_sc,
                         explanation=(
                             f"Vigenere key length {key_len} (keyword: '{keyword}'). "
                             f"Avg IoC per column: {ioc:.4f}. "
@@ -163,6 +188,7 @@ class VigenereSolver(BaseSolver):
                     )
                 )
 
+        # Score already includes key-length penalty; sort by it directly
         candidates.sort(key=lambda c: -c.language_score)
         return candidates[:5]
 

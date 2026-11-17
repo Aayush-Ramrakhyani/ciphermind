@@ -41,13 +41,14 @@ class Base64Solver(BaseSolver):
             return []
         sc = score_text(decoded)
         content_confidence = ConfidenceLevel(classify_confidence(sc))
-        # Structural detection (regex match + clean decode) guarantees at least LIKELY.
-        # This prevents cipher solvers that accidentally score higher from outranking
-        # a confirmed encoding detection.
+        # Only boost to LIKELY when decoded content is readable (sc > 0.05).
+        # Binary/garbage decodes (sc ≈ 0) must not outrank real cipher candidates.
         if content_confidence == ConfidenceLevel.HIGH:
             confidence = ConfidenceLevel.HIGH
-        else:
+        elif sc > 0.05:
             confidence = ConfidenceLevel.LIKELY
+        else:
+            confidence = content_confidence
         return [
             CipherCandidate(
                 cipher_type="base64",

@@ -16,16 +16,18 @@ import '../models/analysis_result.dart';
 import 'home_screen.dart';
 
 class AnalysisScreen extends ConsumerStatefulWidget {
-  final String jobId;
+  final String? jobId;
+  final Map<String, dynamic>? inlineResult;
 
-  const AnalysisScreen({super.key, required this.jobId});
+  const AnalysisScreen({super.key, this.jobId, this.inlineResult})
+      : assert(jobId != null || inlineResult != null);
 
   @override
   ConsumerState<AnalysisScreen> createState() => _AnalysisScreenState();
 }
 
 class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
-  AnalysisJob? _job;
+  AnalysisResult? _result;
   bool _loading = true;
   String? _error;
   int _pollCount = 0;
@@ -34,7 +36,13 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchJob();
+    if (widget.inlineResult != null) {
+      // Playground: results already available, no polling needed
+      _result = AnalysisResult.fromJson(widget.inlineResult!);
+      _loading = false;
+    } else {
+      _fetchJob();
+    }
   }
 
   Future<void> _fetchJob() async {
@@ -47,19 +55,20 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
     }
     try {
       final api = ref.read(apiClientProvider);
-      final data = await api.getAnalysisJob(widget.jobId);
+      final data = await api.getAnalysisJob(widget.jobId!);
       final job = AnalysisJob.fromJson(data);
-      setState(() {
-        _job = job;
-        _pollCount++;
-      });
+      setState(() => _pollCount++);
       if (job.isPending) {
         _timer = Timer(
           Duration(milliseconds: AppConstants.pollIntervalMs),
           _fetchJob,
         );
       } else {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _result = job.result;
+          if (job.isFailed) _error = 'Analysis failed on the server.';
+        });
       }
     } catch (e) {
       setState(() {
@@ -111,35 +120,23 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
       );
     }
 
-    final job = _job;
-    if (job == null || job.isPending) {
+    if (_loading) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const CircularProgressIndicator(color: AppTheme.primaryCyan),
             const SizedBox(height: 20),
-            Text(
-              'Analysing ciphertext...',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
+            Text('Analysing ciphertext...', style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(height: 8),
-            Text(
-              'Running cipher solvers and statistical analysis',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text('Running cipher solvers and statistical analysis',
+                style: Theme.of(context).textTheme.bodyMedium),
           ],
         ),
       );
     }
 
-    if (job.isFailed) {
-      return Center(
-        child: Text('Analysis failed.', style: const TextStyle(color: AppTheme.errorRed)),
-      );
-    }
-
-    final result = job.result;
+    final result = _result;
     if (result == null) {
       return const Center(child: Text('No result available.'));
     }
@@ -252,6 +249,29 @@ class _CandidatesSection extends StatelessWidget {
   }
 }
 
+String _friendlyName(String cipherType) {
+  switch (cipherType.toLowerCase()) {
+    case 'caesar':      return 'Alphabet Shift (Caesar)';
+    case 'rot13':       return 'Flip 13 Letters (ROT-13)';
+    case 'rot5':        return 'Flip 5 Numbers (ROT-5)';
+    case 'rot18':       return 'Flip Letters & Numbers (ROT-18)';
+    case 'rot47':       return 'Flip Everything (ROT-47)';
+    case 'atbash':      return 'Mirror Alphabet (Atbash)';
+    case 'affine':      return 'Math Shuffle (Affine)';
+    case 'vigenere':    return 'Password Cipher (Vigenère)';
+    case 'monoalphabetic': return 'Letter Swap Cipher';
+    case 'playfair':    return 'Grid Cipher (Playfair)';
+    case 'rail_fence':  return 'Zigzag Cipher (Rail Fence)';
+    case 'columnar':    return 'Column Shuffle Cipher';
+    case 'base64':      return 'Computer Text Code (Base64)';
+    case 'hex':         return 'Number Code (Hex)';
+    case 'binary':      return 'Computer On/Off Code (Binary)';
+    case 'morse':       return 'Dot-Dash Code (Morse)';
+    case 'url_encoding': return 'Web Link Code (URL)';
+    default:            return cipherType.toUpperCase();
+  }
+}
+
 class _CandidateCard extends StatefulWidget {
   final CipherCandidate candidate;
   final int rank;
@@ -290,7 +310,7 @@ class _CandidateCardState extends State<_CandidateCard> {
                 children: [
                   Text('${c.confidenceEmoji} ', style: const TextStyle(fontSize: 16)),
                   Text(
-                    '#${widget.rank} ${c.cipherType.toUpperCase()}',
+                    '#${widget.rank} ${_friendlyName(c.cipherType)}',
                     style: TextStyle(
                       color: isTop ? AppTheme.successGreen : AppTheme.textPrimary,
                       fontWeight: FontWeight.w600,
@@ -326,7 +346,9 @@ class _CandidateCardState extends State<_CandidateCard> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    c.plaintext.length > 150 ? '${c.plaintext.substring(0, 150)}...' : c.plaintext,
+                    (!_expanded && c.plaintext.length > 150)
+                        ? '${c.plaintext.substring(0, 150)}...'
+                        : c.plaintext,
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: AppTheme.textPrimary),
                   ),
                 ),

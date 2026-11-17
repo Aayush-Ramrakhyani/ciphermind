@@ -62,8 +62,13 @@ class UrlSolver(BaseSolver):
             if decoded is None:
                 continue
             sc = score_text(decoded)
-            confidence = ConfidenceLevel(classify_confidence(sc))
-            boosted = ConfidenceLevel.HIGH if confidence == ConfidenceLevel.HIGH else ConfidenceLevel.LIKELY
+            content_conf = ConfidenceLevel(classify_confidence(sc))
+            if content_conf == ConfidenceLevel.HIGH:
+                boosted = ConfidenceLevel.HIGH
+            elif sc > 0.05:
+                boosted = ConfidenceLevel.LIKELY
+            else:
+                boosted = content_conf
             candidates.append(
                 CipherCandidate(
                     cipher_type="url_encoding",
