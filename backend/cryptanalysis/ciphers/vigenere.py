@@ -140,57 +140,55 @@ class VigenereSolver(BaseSolver):
         self.max_key_len = max_key_len
 
     def solve(self, ciphertext: str) -> List[CipherCandidate]:
-        # Collect candidate key lengths from both methods
-        kasiski_lengths = _kasiski_key_lengths(ciphertext)
-        ioc_lengths = best_key_lengths(ciphertext, self.max_key_len)
-
-        # Merge, deduplicate, limit
-        seen = set()
+        # Collect and merge candidate key lengths, cap at 6 to limit search space
+        seen: set = set()
         combined: List[int] = []
-        for kl in kasiski_lengths + ioc_lengths:
+        for kl in _kasiski_key_lengths(ciphertext) + best_key_lengths(ciphertext, self.max_key_len):
             if kl not in seen and 2 <= kl <= self.max_key_len:
                 seen.add(kl)
                 combined.append(kl)
-        candidate_lengths = combined[:8]  # test at most 8 lengths
+        candidate_lengths = combined[:6]
 
-        candidates = []
+        # Phase 1: quick initial score for each key length (single best key, no hill-climb)
+        initial: List[Tuple[str, float, int]] = []
         seen_keys: set = set()
         for key_len in candidate_lengths:
-            # Try top-2 shifts per column to handle noisy columns
-            key_candidates = _recover_key_candidates(ciphertext, key_len, top_per_col=2)
-            ioc = average_ioc_for_key_length(ciphertext, key_len)
-            for keyword in key_candidates:
-                if keyword in seen_keys:
-                    continue
-                seen_keys.add(keyword)
-                # Refine the key via hill-climbing before scoring
-                refined_key, sc = _refine_key(ciphertext, keyword)
-                if refined_key != keyword:
-                    seen_keys.add(refined_key)
-                keyword = refined_key
-                plaintext = _vigenere_decrypt(ciphertext, keyword)
-                # Penalise longer keys so a Caesar/Affine won't be beaten by Vigenère overfitting
-                penalised_sc = round(sc - 0.008 * len(keyword), 4)
-                confidence = ConfidenceLevel(classify_confidence(penalised_sc))
-                candidates.append(
-                    CipherCandidate(
-                        cipher_type="vigenere",
-                        plaintext=plaintext,
-                        key=keyword,
-                        confidence=confidence,
-                        language_score=penalised_sc,
-                        explanation=(
-                            f"Vigenere key length {key_len} (keyword: '{keyword}'). "
-                            f"Avg IoC per column: {ioc:.4f}. "
-                            "Key recovered via per-column chi-squared minimisation."
-                        ),
-                        metadata={"key_length": key_len, "avg_ioc": round(ioc, 4)},
-                    )
-                )
+            keyword = _recover_key_for_length(ciphertext, key_len)
+            if keyword in seen_keys:
+                continue
+            seen_keys.add(keyword)
+            sc = score_text(_vigenere_decrypt(ciphertext, keyword))
+            initial.append((keyword, sc, key_len))
 
-        # Score already includes key-length penalty; sort by it directly
+        # Phase 2: hill-climb only the top 3 initial candidates
+        initial.sort(key=lambda x: -x[1])
+        candidates = []
+        seen_refined: set = set()
+        for keyword, _, key_len in initial[:3]:
+            ioc = average_ioc_for_key_length(ciphertext, key_len)
+            refined_key, sc = _refine_key(ciphertext, keyword)
+            if refined_key in seen_refined:
+                continue
+            seen_refined.add(refined_key)
+            penalised_sc = round(sc - 0.008 * len(refined_key), 4)
+            candidates.append(
+                CipherCandidate(
+                    cipher_type="vigenere",
+                    plaintext=_vigenere_decrypt(ciphertext, refined_key),
+                    key=refined_key,
+                    confidence=ConfidenceLevel(classify_confidence(penalised_sc)),
+                    language_score=penalised_sc,
+                    explanation=(
+                        f"Vigenere key length {key_len} (keyword: '{refined_key}'). "
+                        f"Avg IoC per column: {ioc:.4f}. "
+                        "Key recovered via chi-squared + hill-climb refinement."
+                    ),
+                    metadata={"key_length": key_len, "avg_ioc": round(ioc, 4)},
+                )
+            )
+
         candidates.sort(key=lambda c: -c.language_score)
-        return candidates[:5]
+        return candidates[:3]
 
     def can_handle(self, ciphertext: str) -> bool:
         return sum(1 for c in ciphertext if c.isalpha()) >= 15

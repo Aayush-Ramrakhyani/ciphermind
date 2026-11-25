@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 from cryptanalysis.base import AnalysisResult, CipherCandidate, ConfidenceLevel
@@ -51,7 +52,7 @@ class CryptanalysisOrchestrator:
         mono_iter = cfg.get("MONO_MAX_ITERATIONS", 10000)
         playfair_iter = cfg.get("PLAYFAIR_MAX_ITERATIONS", 5000)
         vigenere_max_key = cfg.get("VIGENERE_MAX_KEY_LEN", 20)
-        self.multilayer_max_depth = cfg.get("MULTILAYER_MAX_DEPTH", 3)
+        self.multilayer_max_depth = cfg.get("MULTILAYER_MAX_DEPTH", 2)
         self.candidate_top_n = cfg.get("CANDIDATE_TOP_N", 5)
 
         self._cipher_solvers = [
@@ -105,46 +106,63 @@ class CryptanalysisOrchestrator:
 
         # ── 1. Statistical pre-analysis ──────────────────────────────────────
         result.statistical_summary = self._statistical_summary(ciphertext)
+        ioc = result.statistical_summary.get("index_of_coincidence", 0.05)
+        alpha_len = result.statistical_summary.get("alpha_count", len(ciphertext))
 
-        # ── 2. Encoding detection ─────────────────────────────────────────────
+        # ── 2. Encoding detection (fast — run first, skip cipher pass on hit) ─
         all_candidates: List[CipherCandidate] = []
-        detected_encodings = []
+        detected_encodings: List[str] = []
         for solver in self._encoding_solvers:
-            if solver.can_handle(ciphertext):
-                try:
-                    candidates = solver.solve(ciphertext)
-                    if candidates:
-                        detected_encodings.append(solver.name)
-                        all_candidates.extend(candidates)
-                except Exception as exc:
-                    logger.warning("Encoding solver %s failed: %s", solver.name, exc)
+            if not solver.can_handle(ciphertext):
+                continue
+            try:
+                found = solver.solve(ciphertext)
+                if found:
+                    detected_encodings.append(solver.name)
+                    all_candidates.extend(found)
+            except Exception as exc:
+                logger.warning("Encoding solver %s failed: %s", solver.name, exc)
 
         result.detected_encodings = detected_encodings
 
-        # ── 3. Cipher solvers ─────────────────────────────────────────────────
-        ioc_type = result.statistical_summary.get("cipher_type_hint", "unknown")
-        for solver in self._cipher_solvers:
-            if not solver.can_handle(ciphertext):
-                continue
-            # Skip heavy solvers on very short text
-            if len(ciphertext) < 10 and solver.name in ("vigenere", "playfair", "monoalphabetic"):
-                continue
-            try:
-                candidates = solver.solve(ciphertext)
-                all_candidates.extend(candidates)
-            except Exception as exc:
-                logger.warning("Cipher solver %s failed: %s", solver.name, exc)
+        # If a HIGH-confidence encoding was found, skip all cipher solvers
+        has_high_encoding = any(c.confidence == ConfidenceLevel.HIGH for c in all_candidates)
 
-        # ── 4. Rank candidates ────────────────────────────────────────────────
+        # ── 3. Cipher solvers (parallel) ──────────────────────────────────────
+        if not has_high_encoding:
+            active_solvers = [
+                s for s in self._cipher_solvers
+                if s.can_handle(ciphertext)
+                # Skip heavy solvers on very short text
+                and not (alpha_len < 10 and s.name in ("vigenere", "playfair", "monoalphabetic"))
+                # Skip Vigenère when IoC strongly suggests monoalphabetic
+                and not (s.name == "vigenere" and ioc > 0.060)
+                # Skip mono-substitution solvers when IoC suggests polyalphabetic
+                and not (s.name in ("monoalphabetic", "playfair") and ioc < 0.038)
+            ]
+
+            def _run(solver):
+                try:
+                    return solver.solve(ciphertext)
+                except Exception as exc:
+                    logger.warning("Cipher solver %s failed: %s", solver.name, exc)
+                    return []
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                for found in pool.map(_run, active_solvers):
+                    all_candidates.extend(found)
+
+        # ── 4. Rank + deduplicate ─────────────────────────────────────────────
         ranked = rank_candidates(all_candidates, top_n=self.candidate_top_n * 3)
         result.candidates = self._deduplicate(ranked, top_n=self.candidate_top_n)
 
-        # ── 5. Multi-layer search ─────────────────────────────────────────────
-        try:
-            chains = self._search_engine.search(ciphertext)
-            result.multilayer_chains = [chain.to_dict() for chain in chains]
-        except Exception as exc:
-            logger.warning("Multi-layer search failed: %s", exc)
+        # ── 5. Multi-layer search (only on short texts, depth=2) ──────────────
+        if alpha_len <= 200:
+            try:
+                chains = self._search_engine.search(ciphertext)
+                result.multilayer_chains = [chain.to_dict() for chain in chains]
+            except Exception as exc:
+                logger.warning("Multi-layer search failed: %s", exc)
 
         result.processing_time_ms = round((time.monotonic() - start) * 1000)
         return result
